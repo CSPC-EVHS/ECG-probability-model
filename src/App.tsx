@@ -100,9 +100,17 @@ const Prose = styled.p`
 
 const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin: 12px 0;
+
+  @media (max-width: 620px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 390px) {
+    grid-template-columns: 1fr;
+  }
 `;
 
 const Stat = styled.div`
@@ -131,6 +139,10 @@ const ChartBox = styled.div`
   width: 100%;
   height: 300px;
   margin-top: 8px;
+`;
+
+const WindowChartBox = styled(ChartBox)`
+  height: 320px;
 `;
 
 const Note = styled.p`
@@ -193,6 +205,35 @@ function fmt(value: number | null, digits = 3): string {
 function pct(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "—";
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function WaveformTooltip({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  label?: number | string;
+  payload?: Array<{ value?: number | string }>;
+}) {
+  const time = Number(label);
+  const amplitude = Number(payload?.find((item) => Number.isFinite(Number(item.value)))?.value);
+  if (!active || !Number.isFinite(time) || !Number.isFinite(amplitude)) return null;
+  return (
+    <div
+      style={{
+        background: "#fffdf8",
+        border: "1px solid #e4d9c6",
+        borderRadius: 8,
+        padding: "8px 10px",
+        fontFamily: "ui-sans-serif, system-ui, sans-serif",
+        fontSize: 13,
+      }}
+    >
+      <div>{time.toFixed(2)} s</div>
+      <div>{amplitude.toFixed(2)} mV</div>
+    </div>
+  );
 }
 
 function FitStats({ fit, title, mark = false }: { fit: Fit; title: string; mark?: boolean }) {
@@ -352,19 +393,17 @@ function App() {
             <ComposedChart data={report.trace} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#efe6d6" />
               <XAxis dataKey="t" type="number" domain={[0, 60]} tickFormatter={(value) => `${value}s`} />
-              <YAxis unit=" mV" width={70} />
-              <Tooltip
-                formatter={(value) => [`${Number(value).toFixed(2)} mV`, "Amplitude"]}
-                labelFormatter={(label) => `${Number(label).toFixed(2)} s`}
-              />
-              <ReferenceArea x1={40} x2={60} fill="#0f6e6b" fillOpacity={0.08} />
+              <YAxis width={70} />
+              <Tooltip content={<WaveformTooltip />} cursor={{ stroke: "#0f6e6b", strokeWidth: 1 }} />
+              <ReferenceArea x1={40} x2={60} fill="#0f6e6b" fillOpacity={0.16} />
               <Line dataKey="mV" stroke="#9d1c2b" dot={false} strokeWidth={1.4} isAnimationActive={false} />
               <Scatter data={report.peaks} dataKey="mV" fill="#1c1915" name="R peak" isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </ChartBox>
         <Note>
-          Black dots are detected R peaks. The teal band is the locked last 20 seconds. The trace is a min/max
+          Black dots are detected R peaks. The teal band is the locked last 20 seconds. Hovering shows the
+          nearest trace time and amplitude; the trace is a min/max
           sketch of the samples so the tall QRS spikes stay visible.
         </Note>
       </Section>
@@ -383,7 +422,7 @@ function App() {
         <Prose>
           A window with fewer than two kept intervals is unscored. Otherwise the window heart rate is 60
           divided by the mean RR, and the irregularity score is the largest relative distance from the
-          window median RR. The alert is the or of those two checks.
+          window median RR. The alert is the OR of those two checks.
         </Prose>
         <Tex
           block
@@ -402,13 +441,14 @@ function App() {
             "\\theta\\mid k,n\\sim\\mathrm{Beta}(\\alpha_0+k,\\ \\beta_0+n-k),\\quad \\hat p=\\frac{\\alpha_0+k}{\\alpha_0+\\beta_0+n}"
           }
         />
-        <ChartBox>
+        <WindowChartBox>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={report.lockedWindows} margin={{ top: 16, right: 12, left: 0, bottom: 0 }}>
+            <BarChart data={report.lockedWindows} margin={{ top: 32, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#efe6d6" />
               <XAxis dataKey="index" tickFormatter={(value) => `${Number(value) * 5}s`} />
               <YAxis domain={[0, 110]} width={48} />
               <Tooltip
+                cursor={{ fill: "rgba(92, 83, 72, 0.12)" }}
                 formatter={(value) => [`${Number(value).toFixed(1)} BPM`, "Mean HR"]}
                 labelFormatter={(label) => `Window at ${Number(label) * 5}s`}
               />
@@ -425,9 +465,10 @@ function App() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </ChartBox>
+        </WindowChartBox>
         <Note>
-          Stone bars are training windows. Teal bars are the locked test. Every window on this strip sits
+          Stone bars are training windows; teal bars are the locked test. The gray hover band marks only the
+          window being inspected. Every window on this strip sits
           near {fmt(report.minInstHr, 0)}–{fmt(report.maxInstHr, 0)} BPM. Instantaneous rate never crosses 85
           either (fastest interval {fmt(report.maxInstHr, 1)} BPM). The largest RR departure from the strip
           median is {pct(report.maxRelDev)}, against a 20% rule. Coefficient of variation of RR is{" "}
@@ -554,7 +595,7 @@ function WindowTable({ windows }: { windows: ScoredWindow[] }) {
             <th>Role</th>
             <th>RR intervals</th>
             <th>Mean HR</th>
-            <th>Max deviation</th>
+            <th>Max deviation from window median</th>
             <th>Alert</th>
           </tr>
         </thead>
