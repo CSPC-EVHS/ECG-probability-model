@@ -397,7 +397,14 @@ function App() {
               <Tooltip content={<WaveformTooltip />} cursor={{ stroke: "#0f6e6b", strokeWidth: 1 }} />
               <ReferenceArea x1={40} x2={60} fill="#0f6e6b" fillOpacity={0.16} />
               <Line dataKey="mV" stroke="#9d1c2b" dot={false} strokeWidth={1.4} isAnimationActive={false} />
-              <Scatter data={report.peaks} dataKey="mV" fill="#1c1915" name="R peak" isAnimationActive={false} />
+              <Scatter
+                data={report.peaks}
+                dataKey="mV"
+                fill="#1c1915"
+                name="R peak"
+                tooltipType="none"
+                isAnimationActive={false}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </ChartBox>
