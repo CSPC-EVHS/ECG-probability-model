@@ -8,6 +8,7 @@ import {
   Line,
   LineChart,
   ReferenceArea,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
@@ -421,7 +422,24 @@ function App() {
               <XAxis dataKey="t" type="number" domain={[0, 60]} tickFormatter={(value) => `${value}s`} />
               <YAxis width={70} />
               <ReferenceArea x1={40} x2={60} fill="#0f6e6b" fillOpacity={0.16} />
-              <Line dataKey="mV" stroke="#9d1c2b" dot={false} strokeWidth={1.4} isAnimationActive={false} />
+              <Line
+                dataKey="mV"
+                stroke="#9d1c2b"
+                dot={false}
+                activeDot={false}
+                strokeWidth={1.4}
+                isAnimationActive={false}
+              />
+              {waveformPoint && (
+                <ReferenceDot
+                  x={waveformPoint.t}
+                  y={waveformPoint.mV}
+                  r={4}
+                  fill="#9d1c2b"
+                  stroke="#fffdf8"
+                  strokeWidth={1.5}
+                />
+              )}
               <Scatter
                 data={report.peaks}
                 dataKey="mV"
