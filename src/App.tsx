@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -141,6 +141,26 @@ const ChartBox = styled.div`
   margin-top: 8px;
 `;
 
+const WaveformChartBox = styled(ChartBox)`
+  position: relative;
+`;
+
+const WaveformReadout = styled.div`
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 1;
+  pointer-events: none;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+`;
+
 const WindowChartBox = styled(ChartBox)`
   height: 320px;
 `;
@@ -207,33 +227,17 @@ function pct(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function WaveformTooltip({
-  active,
-  label,
-  payload,
-}: {
-  active?: boolean;
-  label?: number | string;
-  payload?: Array<{ value?: number | string }>;
-}) {
-  const time = Number(label);
-  const amplitude = Number(payload?.find((item) => Number.isFinite(Number(item.value)))?.value);
-  if (!active || !Number.isFinite(time) || !Number.isFinite(amplitude)) return null;
-  return (
-    <div
-      style={{
-        background: "#fffdf8",
-        border: "1px solid #e4d9c6",
-        borderRadius: 8,
-        padding: "8px 10px",
-        fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        fontSize: 13,
-      }}
-    >
-      <div>{time.toFixed(2)} s</div>
-      <div>{amplitude.toFixed(2)} mV</div>
-    </div>
-  );
+function nearestWaveformPoint(points: Array<{ t: number; mV: number }>, time: number) {
+  let low = 0;
+  let high = points.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (points[middle].t < time) low = middle + 1;
+    else high = middle;
+  }
+  const after = points[low];
+  const before = points[Math.max(0, low - 1)];
+  return Math.abs(before.t - time) <= Math.abs(after.t - time) ? before : after;
 }
 
 function FitStats({ fit, title, mark = false }: { fit: Fit; title: string; mark?: boolean }) {
@@ -278,6 +282,7 @@ function FitStats({ fit, title, mark = false }: { fit: Fit; title: string; mark?
 
 function App() {
   const report = useMemo<Report>(() => analyzeCsv(csvText), []);
+  const [waveformPoint, setWaveformPoint] = useState<{ t: number; mV: number } | null>(null);
   const density = useMemo(() => {
     if (!report.locked) return [];
     const prior = densitySeries(PRIOR_ALPHA, PRIOR_BETA);
@@ -388,13 +393,33 @@ function App() {
         {report.skipped > 0 && (
           <Banner>{report.skipped} malformed rows were skipped. Charts use the remaining samples.</Banner>
         )}
-        <ChartBox>
+        <WaveformChartBox
+          onMouseMove={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const plotLeft = 70;
+            const plotRight = bounds.width - 12;
+            const x = event.clientX - bounds.left;
+            if (x < plotLeft || x > plotRight || plotRight <= plotLeft) {
+              setWaveformPoint(null);
+              return;
+            }
+            const targetTime = ((x - plotLeft) / (plotRight - plotLeft)) * 60;
+            const next = nearestWaveformPoint(report.trace, targetTime);
+            setWaveformPoint((current) => (current?.t === next.t ? current : next));
+          }}
+          onMouseLeave={() => setWaveformPoint(null)}
+        >
+          {waveformPoint && (
+            <WaveformReadout>
+              <div>{waveformPoint.t.toFixed(2)} s</div>
+              <div>{waveformPoint.mV.toFixed(2)} mV</div>
+            </WaveformReadout>
+          )}
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={report.trace} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid stroke="#efe6d6" />
               <XAxis dataKey="t" type="number" domain={[0, 60]} tickFormatter={(value) => `${value}s`} />
               <YAxis width={70} />
-              <Tooltip content={<WaveformTooltip />} cursor={{ stroke: "#0f6e6b", strokeWidth: 1 }} />
               <ReferenceArea x1={40} x2={60} fill="#0f6e6b" fillOpacity={0.16} />
               <Line dataKey="mV" stroke="#9d1c2b" dot={false} strokeWidth={1.4} isAnimationActive={false} />
               <Scatter
@@ -407,7 +432,7 @@ function App() {
               />
             </ComposedChart>
           </ResponsiveContainer>
-        </ChartBox>
+        </WaveformChartBox>
         <Note>
           Black dots are detected R peaks. The teal band is the locked last 20 seconds. Hovering shows the
           nearest trace time and amplitude; the trace is a min/max
